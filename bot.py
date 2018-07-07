@@ -63,7 +63,9 @@ lastTweet = None
 while True:
 	start = 1
 	if (n == 1):
-		parse_list(mentions(1015662111194664960), mts)
+		lt = api.get_user_timeline(screen_name='_cryptobot', count=1)[0]['id']
+		print "Init edge: " + str(lt)
+		parse_list(mentions(lt), mts)
 	elif (n == 0):
 		parse_list(mentions(lastTweet), mts)
 

@@ -3,6 +3,7 @@
 import sys
 import time
 import keys
+import binascii
 from twython import Twython
 from random import randint
 
@@ -12,6 +13,7 @@ auth = api.get_authentication_tokens()
 oauthToken = auth['oauth_token']
 oauthTokenSecret = auth['oauth_token_secret']
 
+# twitter functions
 def search(text):
 	results = api.cursor(api.search, q=text, count=1)
 	return results
@@ -37,10 +39,7 @@ def mentions(sid):
 				yield mnt
 
 def parse_list(dict, list):
-	for h in range(0, (len(list))):
-		print "Removed item num " + str(h) + ": " + str(list[h])
-		list.remove(list[h])
-
+	del list[:]
 	for x in dict:
 		list.append(x)
 
@@ -48,6 +47,69 @@ def delay(secs):
 	for l in range(0, secs):
 		print l
 		time.sleep(1)
+
+def send_dm(userid, text):
+	api.send_direct_message(user_id=userid, text=text)
+
+# cryptography functions
+
+abcNMin = {1: 'a', 2: 'b', 3: 'c', 4: 'd', 5: 'e', 6: 'f', 7: 'g', 8: 'h', 9: 'i', 10: 'j', 11: 'k',
+		12: 'l', 13: 'm', 14: 'n', 15: 'o', 16: 'p', 17: 'q', 18: 'r', 19: 's', 20: 't', 21: 'u',
+		22: 'v', 23: 'w', 24: 'x', 25: 'y', 26: 'z'}
+
+abcNMay = {1: 'A', 2: 'B', 3: 'C', 4: 'D', 5: 'E', 6: 'F', 7: 'G', 8: 'H', 9: 'I', 10: 'J', 11: 'K',
+		12: 'L', 13: 'M', 14: 'N', 15: 'O', 16: 'P', 17: 'Q', 18: 'R', 19: 'S', 20: 'T', 21: 'U',
+		22: 'V', 23: 'W', 24: 'X', 25: 'Y', 26: 'Z'}
+
+abcLMin = {v: k for k, v in abcNMin.iteritems()}
+abcLMay = {v: k for k, v in abcNMay.iteritems()}
+
+nums = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+
+techs = {1: 'caesar', 2: 'binary'}
+
+def encrypt(tech, plain_text):
+	if (tech == 1):
+		pt_c = []
+		crypto_c = []
+		key = randint(1, 26)
+
+		for c in plain_text:
+			pt_c.append(c)
+
+		for x in range(0, (len(pt_c))):
+			if (pt_c[x] in abcLMin):
+				enc_ch = None
+				if ((abcLMin[pt_c[x]] + key) > 26):
+					enc_ch = abcNMin[(abcLMin[pt_c[x]] + key) - 26]
+				else:
+					enc_ch = abcNMin[abcLMin[pt_c[x]] + key]
+				crypto_c.append(enc_ch)
+			elif (pt_c[x] in abcLMay):
+				enc_ch = None
+				if ((abcLMay[pt_c[x]] + key) > 26):
+					enc_ch = abcNMay[(abcLMay[pt_c[x]] + key) - 26]
+				else:
+					enc_ch = abcNMay[abcLMay[pt_c[x]] + key]
+				crypto_c.append(enc_ch)
+			else:
+				crypto_c.append(pt_c[x])
+		return ''.join(crypto_c)
+	if (tech == 2):
+		return str(bin(int(binascii.hexlify(plain_text), 16))).replace('b', '')
+
+def chooseEncrypt(tweet):
+	tweetText = tweet['text']
+	
+	if (len(tweetText) <= 40):
+		ri = randint(1, len(techs))
+		if ri == 1:
+			return 1
+		elif ri == 2:
+			for c in tweetText:
+				if c not in nums:
+					return 2
+	return 1
 
 # main loop
 global mts
@@ -64,24 +126,27 @@ while True:
 	start = 1
 	if (n == 1):
 		lt = api.get_user_timeline(screen_name='_cryptobot', count=1)[0]['id']
-		print "Init edge: " + str(lt)
+		print lt
 		parse_list(mentions(lt), mts)
 	elif (n == 0):
 		parse_list(mentions(lastTweet), mts)
 
-	print "Listed mentions..."
-	print "mst: " + str(len(mts))
+	print "mts: " + str(len(mts))
 	print "n: " + str(n)
 
 	delay(30)
+	#time.sleep(30)
 
 	if ((len(mts)>0) and (start == 1)):
-		print "Inside loop 1"
+		#print "Inside loop 1"
 		start = 0
 		n = 0
 		for i in mts:
-			reply(api, i, "@"+i['user']['screen_name']+" OK: " + str(randint(0, 100000)))
+			t = chooseEncrypt(i)
+			reply(api, i, "@"+i['user']['screen_name']+" "+str(encrypt(t, str(i['text'].replace('@_cryptobot', '')))))
+			send_dm(i['user']['id'], "Technique used for: '" + i['text'] + "' is " + techs[t])
 			lastTweet = i['id']
-			print lastTweet
+			#print lastTweet
 			print str(n) + " Replied to " + i['user']['screen_name']
-			delay(60)
+			#time.sleep(60)
+			delay(30)

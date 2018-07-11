@@ -4,6 +4,7 @@ import sys
 import time
 import keys
 import binascii
+import hashlib
 from twython import Twython
 from random import randint
 
@@ -66,50 +67,91 @@ abcLMay = {v: k for k, v in abcNMay.iteritems()}
 
 nums = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 
-techs = {1: 'caesar', 2: 'binary'}
+techs = {1: 'caesar', 2: 'binary', 3: 'ROT13', 4: 'MD5'}
 
-def encrypt(tech, plain_text):
-	if (tech == 1):
-		pt_c = []
-		crypto_c = []
-		key = randint(1, 26)
+def shiftText(text_c, n, tech):
+	crypto_c = []
 
-		for c in plain_text:
-			pt_c.append(c)
-
-		for x in range(0, (len(pt_c))):
-			if (pt_c[x] in abcLMin):
+	for x in range(0, (len(text_c))):
+			if (text_c[x] in abcLMin):
 				enc_ch = None
-				if ((abcLMin[pt_c[x]] + key) > 26):
-					enc_ch = abcNMin[(abcLMin[pt_c[x]] + key) - 26]
+				if ((abcLMin[text_c[x]] + n) > 26):
+					enc_ch = abcNMin[(abcLMin[text_c[x]] + n) - 26]
 				else:
-					enc_ch = abcNMin[abcLMin[pt_c[x]] + key]
+					enc_ch = abcNMin[abcLMin[text_c[x]] + n]
 				crypto_c.append(enc_ch)
-			elif (pt_c[x] in abcLMay):
+			elif (text_c[x] in abcLMay):
 				enc_ch = None
-				if ((abcLMay[pt_c[x]] + key) > 26):
-					enc_ch = abcNMay[(abcLMay[pt_c[x]] + key) - 26]
+				if ((abcLMay[text_c[x]] + n) > 26):
+					enc_ch = abcNMay[(abcLMay[text_c[x]] + n) - 26]
 				else:
-					enc_ch = abcNMay[abcLMay[pt_c[x]] + key]
+					enc_ch = abcNMay[abcLMay[text_c[x]] + n]
+				crypto_c.append(enc_ch)
+			elif (text_c[x] in nums):
+				if (tech == 1):
+					if (n >= 20):
+						enc_ch = ((text_c[x] + (n-20))-10)
+					elif (n >= 10):
+						enc_ch = ((text_c[x] + (n-10))-10)
+					else:
+						enc_ch = ((text_c[x] + n)-10)
+				if (tech == 3):
+					if (text_c[x] + 3 > len(nums)):
+						enc_ch = (text_c[x] + 3) - 10
+					else:
+						enc_ch = text_c[x] + 3
 				crypto_c.append(enc_ch)
 			else:
-				crypto_c.append(pt_c[x])
-		return ''.join(crypto_c)
-	if (tech == 2):
+				crypto_c.append(text_c[x])
+				
+	return ''.join(crypto_c).encode('utf-8').strip()
+
+
+def encrypt(tech, plain_text):
+	pt_c = []
+	
+	for c in plain_text:
+			pt_c.append(c)
+
+	if (tech == 1): # Caesar
+		key = randint(1, 26)
+		return shiftText(pt_c, key, tech)
+	if (tech == 2): # Binary
 		return str(bin(int(binascii.hexlify(plain_text), 16))).replace('b', '')
+	if (tech == 3): # ROT13
+		return shiftText(pt_c, 13, tech)
+	if (tech == 4):
+		m = hashlib.md5()
+		m.update(plain_text)
+		return m.hexdigest()
+
 
 def chooseEncrypt(tweet):
 	tweetText = tweet['text']
-	
-	if (len(tweetText) <= 40):
-		ri = randint(1, len(techs))
+	ri = randint(1, len(techs))
+
+	if (len(tweetText) <= 30):
 		if ri == 1:
 			return 1
 		elif ri == 2:
-			for c in tweetText:
-				if c not in nums:
-					return 2
-	return 1
+			return 2
+		elif ri == 3:
+			return 3
+		elif ri == 4:
+			return 4
+	if ri == 2:
+		ri2 = randint(1, len(techs)-1)
+		if ri2 == 1:
+			ri+=1
+		elif ri2 == 2:
+			ri-=1
+	if ri == 1:
+		return 1
+	elif ri == 3:
+		return 3
+	elif ri == 4:
+		return 4
+
 
 # main loop
 global mts
@@ -143,8 +185,9 @@ while True:
 		n = 0
 		for i in mts:
 			t = chooseEncrypt(i)
-			reply(api, i, "@"+i['user']['screen_name']+" "+str(encrypt(t, str(i['text'].replace('@_cryptobot', '')))))
-			send_dm(i['user']['id'], "Technique used for: '" + i['text'] + "' is " + techs[t])
+			replyTweet = reply(api, i, "@"+i['user']['screen_name']+" "+str(encrypt(t, str(i['text'].replace('@_cryptobot', '')))))
+			reply(api, replyTweet, "@"+i['user']['screen_name']+" "+"Technique used is: " + techs[t])
+			#send_dm(i['user']['id'], "Technique used for: '" + i['text'] + "' is " + techs[t])
 			lastTweet = i['id']
 			#print lastTweet
 			print str(n) + " Replied to " + i['user']['screen_name']
